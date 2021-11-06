@@ -13,29 +13,27 @@ namespace TestApp
 {
     public partial class MainWindow : Window
     {
-        private List<GammaRay> m_GammaRay;
-        private List<OutputData> m_OutputData;
-
         public string m_FilePath;
         public MainWindow()
         {
             InitializeComponent();
         }
 
-        public void GetData()
+        public List<GammaRay> GetData()
         {
-            m_GammaRay = new List<GammaRay>();
+            var result = new List<GammaRay>();
             var context = new AppDbContext();
             foreach (var item in context.GammaRay)
             {
-                m_GammaRay.Add(new GammaRay
+                result.Add(new GammaRay
                 {
                     DataStamp = item.DataStamp,
                     MD = item.MD,
                     GRBX = item.GRBX
                 });
             }
-            recordsCount.Content = m_GammaRay.Count().ToString();
+            recordsCount.Content = result.Count().ToString();
+            return result;
         }
 
         public static List<GammaRay> Interpolate(double step, List<GammaRay> gammaRay)
@@ -50,7 +48,7 @@ namespace TestApp
                 var grbxStep = (b.GRBX - a.GRBX) / (b.MD - a.MD) * step;
 
                 var interpolateCount = (b.MD - a.MD) / step - 1;
-                for (int j = 0; j < interpolateCount; j++)
+                for (int j = 0; j < Math.Round(interpolateCount); j++)
                 {
                     result.Add(new GammaRay() { 
                         DataStamp = result[result.Count -1].DataStamp + timeStep,
@@ -59,27 +57,28 @@ namespace TestApp
                     });
                 }
             }
+            result.Add(gammaRay[gammaRay.Count - 1]);
             return result;
         }
 
         private void StartButtonClick(object sender, RoutedEventArgs e)
         {
             if (String.IsNullOrEmpty(m_FilePath)) return;
-            GetData();
-            m_GammaRay = Interpolate(0.1, m_GammaRay);
-            m_OutputData = new List<OutputData>();
-            foreach (var item in m_GammaRay)
+            var input = GetData();
+            input = Interpolate(0.1, input);
+            var output = new List<OutputData>();
+            foreach (var item in input)
             {
-                m_OutputData.Add(new OutputData() { 
+                output.Add(new OutputData() { 
                     MD = (float)item.MD,
                     DataStamp = ((DateTimeOffset)item.DataStamp).ToUnixTimeSeconds(),
                     GRBX = (float)item.GRBX
                 });
             }
-            using (StreamWriter sw = new StreamWriter(m_FilePath, true))
+            using (StreamWriter sw = new StreamWriter(m_FilePath, false, System.Text.Encoding.Default))
             {
                 var writer = new CsvWriter(sw, System.Globalization.CultureInfo.CurrentCulture);
-                writer.WriteRecords(m_OutputData);
+                writer.WriteRecords(output);
                 sw.Close();
             }
             MessageBox.Show("Data succesfuly saved", "Message", MessageBoxButton.OK, MessageBoxImage.Information);
